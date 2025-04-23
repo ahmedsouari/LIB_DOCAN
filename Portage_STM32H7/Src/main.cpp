@@ -22,7 +22,7 @@
 #include "canframe.h"
 #include "Cantp.h"
 #include "stdio.h"
-#include "stm32h7xx_hal_fdcan.h" // Include the FDCAN HAL header
+#include "stm32h7xx_hal_fdcan.h"
 #include "stm32h7xx_hal.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -61,12 +61,12 @@ static void MX_FDCAN1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
-
+bool flag=false;
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-uint8_t payload[MAX_PAYLOAD_SIZE] = { 0 };
-uint8_t RxData[8]={};
-uint8_t TxData1[8]={};
+uint8_t payload[MAX_PAYLOAD_SIZE] = { };
+uint8_t RxData[8] = { };
+uint8_t TxData1[8] = { };
 FDCAN_TxHeaderTypeDef TxHeader1;
 FDCAN_RxHeaderTypeDef RxHeader;
 //uint8_t TxData[8];
@@ -74,18 +74,15 @@ FDCAN_RxHeaderTypeDef RxHeader;
 FDCAN_HandleTypeDef hfdcan1;
 /*Print the received data */
 void PrintCanMessage(uint8_t *RxData) {
-
-	printf("Received Message ! :\n");
-
+	LOG("Received Message ! :\n");
 	/*Display Data*/
-	printf("  Data: ");
+	LOG("  Data: ");
 	for (int i = 0; i < 8; i++) {
-		printf("0x%02X ", RxData[i]);
-		RxData[i]=0;
-	}
-	printf("\n");
-
+		LOG("0x%02X ", RxData[i]);
+		RxData[i] = 0;
+	}LOG("\n");
 }
+
 /* RxFifo0 Callback ( Interruption )*/
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan1,
 		uint32_t RxFifo0ITs) {
@@ -102,6 +99,8 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan1,
 			Error_Handler();
 		}
 	}
+flag = true;
+
 }
 
 /* USER CODE END 0 */
@@ -116,6 +115,7 @@ int main(void) {
 	/* USER CODE BEGIN 1 */
 
 	/* USER CODE END 1 */
+
 	/* USER CODE BEGIN Boot_Mode_Sequence_0 */
 	int32_t timeout;
 	/* USER CODE END Boot_Mode_Sequence_0 */
@@ -180,41 +180,31 @@ int main(void) {
 	}
 
 	/* USER CODE BEGIN 2 */
-
-	printf("[Info main] .. ITM working !! \n");
+	TxHeader1.Identifier = 0x11;
+	TxHeader1.IdType = FDCAN_STANDARD_ID;
+	TxHeader1.TxFrameType = FDCAN_DATA_FRAME;
+	TxHeader1.DataLength = FDCAN_DLC_BYTES_8;
+	TxHeader1.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+	TxHeader1.BitRateSwitch = FDCAN_BRS_OFF;
+	TxHeader1.FDFormat = FDCAN_FD_CAN;
+	TxHeader1.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+	TxHeader1.MessageMarker = 0;
+	LOG("[Info main] .. ITM working !! \n");
 
 	CanFrame frame;
-	CanFrame frametosend;
-	frametosend.can_id =0x12;
-	frametosend.data[0]=11;
-	frametosend.data[1]=11;
-	frametosend.data[2]=11;
-	frametosend.data[3]=11;
-	frametosend.data[4]=11;
-	frametosend.data[5]=11;
-	frametosend.data[6]=11;
-	frametosend.data[7]=11;
-	frametosend.data[8]=11;
+
+
 	/* USER CODE END 2 */
 	Linklayer linklayer;
+	Cantp cantp;
 	/* Infinite loop */
 	/* USER CODE BEGIN WHILE */
-
-	printf("Next is while loop !! \n");
-
 
 	while (1) {
 		/* USER CODE END WHILE */
 		/* USER CODE BEGIN 3 */
-
-		/*print the received message*/
-		//PrintCanMessage(RxData);
-		linklayer.readFrame(frame);
+		cantp.receiveRequest(frame);
 		HAL_Delay(1000);
-		linklayer.sendFrame(frametosend);
-		HAL_Delay(1000);
-
-		//HAL_Delay(1000);
 		/* USER CODE BEGIN 3 */
 
 	}
