@@ -28,6 +28,7 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h7xx_hal.h"
+#include <stdbool.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -53,8 +54,15 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-
+extern  uint8_t RxData[8];
+extern uint8_t TxData1[8];
+extern bool flag;
 /* USER CODE END EFP */
+#ifdef USE_LOG
+#define LOG(X,...) printf()
+#else
+#define LOG(X,...)
+#endif
 
 /* Private defines -----------------------------------------------------------*/
 
