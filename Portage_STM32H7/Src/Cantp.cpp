@@ -34,86 +34,111 @@ uint16_t Cantp::getRequestLength(const CanFrame &frame) {
 		return totalLength;
 	}
 	case ConsecutiveFrame: {
-		printf("Consecutive Frame does not define total length.\n");
+		LOG("Consecutive Frame does not define total length.\n");
 		return 0;
 	}
 	case FlowControlFrame: {
-		printf(" Flow Control Frame does not define total length.\n");
+		LOG(" Flow Control Frame does not define total length.\n");
 		return 0;
 	}
 	default: {
-		
-		return 1;
-	}
-	}
+		LOG(" Unknown PCI type\n");
+		return 0;
+	 }
+   }
 }
 
-void Cantp::decode(CanFrame &frame, uint8_t *payload) {
+void Cantp::decode(CanFrame &frame, uint8_t *payload)
+{
 	Linklayer linklayer;
 	CanFrame nextFrame;
+
 	uint8_t pciType = frame.data[0] >> 4U;
-	uint16_t totalLength;
-	uint16_t receivedLength = 0;
-	switch (pciType) {
-	case SingleFrame: {
+	uint8_t totalLength;
+	uint8_t receivedLength = 0;
+
+
+	switch (pciType)
+	{
+	 case SingleFrame:
+	 {
 		uint8_t payloadLength = (frame.data[0] & 0x0F);
 		memcpy(payload, frame.data + 1, payloadLength);
-		flag = false;
 		break;
 	}
-	case FirstFrame: {
-		//printf("First Frame received.");
+	case FirstFrame:
+	{
+		/*Total Request Length */
 		totalLength = ((frame.data[0] & 0x0F) << 8) | frame.data[1];
-		//printf("Total Length: %d\n", totalLength);
-		uint16_t payloadLength = totalLength > 6 ? 6 : totalLength;
+		uint8_t payloadLength = totalLength > 6 ? 6 : totalLength;
 		memcpy(payload, frame.data + 2, payloadLength);
+		/*Update receivedLenght*/
 		receivedLength += payloadLength;
+		uint8_t timeout=0;
 
 
-		flag = false;
-	
-		while ((receivedLength < totalLength)) {
-			nextFrame.data[0] = 0x0;
-			//printf("0x%X\n ", nextFrame.data[0]);
-			linklayer.readFrame(&nextFrame);
-			//printf("2-0x%X\n ", nextFrame.data[0]);
-			//printf("ENTERING WHILE WHILE FROM CANTP \n");
-
-			printf("waiting for next frame ...\n ");
-			HAL_Delay(100);
-
-			if (((nextFrame.data[0] >> 4) != ConsecutiveFrame)) {
-				//printf("waiting ...\n");
-				HAL_Delay(100);
-				//break;
-			} else {
-				uint16_t remainingLength = totalLength - receivedLength;
-				uint16_t payloadLength =
-						remainingLength > 7 ? 7 : remainingLength;
-				memcpy(payload + receivedLength, nextFrame.data + 1,
-						payloadLength);
-				receivedLength += payloadLength;
-				flag = false;
+		while ( receivedLength < totalLength )
+		{
+			if ( linklayer.readFrame(&nextFrame) !=0 )
+			{
+				timeout++;
+				HAL_Delay(50);
+				LOG("waiting for next frame ...\n ");
+					if (timeout > 101)
+					{
+						printf("TIME OUT ! \n");
+						break;
+					}
+					else
+					{
+						continue;
+					}
+			}
+			else
+			{
+				if ( (nextFrame.data[0] >> 4) != ConsecutiveFrame )
+				  {
+					printf("Invalid Frame Type  ...\n");
+					break;
+				  }
+				else
+				{
+					uint8_t remainingLength = totalLength - receivedLength;
+					uint8_t payloadLength = remainingLength > 7 ? 7 : remainingLength;
+					memcpy(payload + receivedLength, nextFrame.data + 1,payloadLength);
+					receivedLength += payloadLength;
+					timeout=0;
+					/* uint8_t seqId = nextFrame.data[0] & 0x0F; */
+				}
 			}
 		}
+	}
+	default:
+	{
+		printf("Unsupported or unknown PCI type \n");
 		break;
-	}
-	default: {
-		printf("Unsupported or unknown PCI type: 0x\n");
-		break;
-	}
-	}
-	printf("\n");
-	printf("=====================================\n");
-	/*Message Reconstitution */
+    }
+
+}
+
+	if(receivedLength == totalLength)
+	{
+	/* Display Message after */
 	printf("Final Payload (Hex): ");
 	for (uint16_t i = 0; i < receivedLength; ++i) {
-		payload[i] = payload[i];
+		//payload[i] = payload[i];
 		printf("0x%X ", payload[i]);
 	}
 	printf("\n");
-	printf("=====================================\n");
+	}
+	else
+	{
+		printf("Session Aborted ! \n");
+		/* vider le payload */
+	}
 }
+
+
 void Cantp::receiveRequest(CanFrame &frame) {
 	Linklayer linkLayer;
 
@@ -124,17 +149,21 @@ void Cantp::receiveRequest(CanFrame &frame) {
 		/*send flow control frame*/
 		fcFrame.can_id = 0x11;
 		fcFrame.data[0] = FlowControlFrame | _FC_CTS; // PCI type + flow control command
-		fcFrame.data[1] = 0x00; /*Block size*/
-		fcFrame.data[2] = 0x00; /*Separation time*/
+		/*Block size*/
+		fcFrame.data[1] = 0x00;
+		/*Separation time*/
+		fcFrame.data[2] = 0x00;
+
 		/* Send the flow control frame */
-		if (linkLayer.sendFrame(fcFrame) != 0) {
+		if (linkLayer.sendFrame(fcFrame) != 0)
+		{
 			LOG("Error sending Flow Control Frame.\n");
 			return;
-		}LOG("Flow Control Frame sent.\n");
+		}
+		LOG("Flow Control Frame sent.\n");
 		decode(frame, payload);
 
 	}
-
 }
 
 void Cantp::encode(const uint8_t *payload, uint16_t length) {
@@ -148,9 +177,9 @@ void Cantp::encode(const uint8_t *payload, uint16_t length) {
 		frame.data[0] = SingleFrame | (length & 0x0F);
 		memcpy(frame.data + 1, payload, length);
 
-		// Send the frame
+		/*Send The Frame*/
 		if (linkLayer.sendFrame(frame) != 0) {
-			//cerr << "Error sending Single Frame." << endl;
+			LOG("Error sending Single Frame.\n" );
 		}
 	} else {
 		/*Send First Frame*/
@@ -163,7 +192,7 @@ void Cantp::encode(const uint8_t *payload, uint16_t length) {
 
 		/*Send First Frame*/
 		if (linkLayer.sendFrame(firstFrame) != 0) {
-			//cerr << "Error sending First Frame." << endl;
+			LOG("Error sending First Frame.\n");
 			return;
 		}
 
@@ -182,7 +211,7 @@ void Cantp::encode(const uint8_t *payload, uint16_t length) {
 
 			/*Send the consecutive frame*/
 			if (linkLayer.sendFrame(consecutiveFrame) != 0) {
-				//cerr << "Error sending Consecutive Frame." << endl;
+				LOG("Error sending Consecutive Frame.");
 				return;
 			}
 
