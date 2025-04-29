@@ -28,11 +28,26 @@ extern "C" {
 
 /* Includes ------------------------------------------------------------------*/
 #include "stm32h7xx_hal.h"
-#include <stdbool.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#ifdef USE_LOG
+#define LOG(X,...) printf()
+#else
+#define LOG(X,...)
+#endif
+typedef enum {
+	IDLE,
+	ErrorState,
+	ReceiveRequest,
+	ProcessRequest,
+	SendResponse,
+	ErrorDecodingRequest,
+	ErrorEncodingRequest,
+	ErrorHandle
 
+} StateType;
+#include <stdbool.h>
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -54,15 +69,10 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
-extern  uint8_t RxData[8];
+extern uint8_t RxData[8];
 extern uint8_t TxData1[8];
 extern bool flag;
 /* USER CODE END EFP */
-#ifdef USE_LOG
-#define LOG(X,...) printf()
-#else
-#define LOG(X,...)
-#endif
 
 /* Private defines -----------------------------------------------------------*/
 
