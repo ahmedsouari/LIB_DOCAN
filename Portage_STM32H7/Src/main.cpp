@@ -52,6 +52,7 @@
 
 /* Private variables ---------------------------------------------------------*/
 uint8_t payload[MAX_PAYLOAD_SIZE] = {};
+uint8_t response[MAX_PAYLOAD_SIZE] = {};
 uint8_t RxData[8] = {};
 uint8_t TxData1[8] = {};
 FDCAN_TxHeaderTypeDef TxHeader1;
@@ -224,8 +225,9 @@ int main(void)
   defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* definition and creation of ReceiveTask */
-  osThreadDef(ReceiveTask, ReceiveTask_init, osPriorityIdle, 0, 128);
+  osThreadDef(ReceiveTask, ReceiveTask_init, osPriorityHigh, 0, 128);
   ReceiveTaskHandle = osThreadCreate(osThread(ReceiveTask), NULL);
+
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -234,6 +236,8 @@ int main(void)
   /* Start scheduler */
   osKernelStart();
 
+
+
   /* We should never get here as control is now taken by the scheduler */
 
   /* Infinite loop */
@@ -241,9 +245,9 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+//	  cantp.encode(response, 6U);
 
-	  HAL_Delay(50);
-
+//	  printf("Sending \n");
 
     /* USER CODE BEGIN 3 */
   }
@@ -392,9 +396,10 @@ static void MX_GPIO_Init(void)
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
+void StartDefaultTask(void const * argument) /*Test Sending a response */
 {
   /* USER CODE BEGIN 5 */
+
   /* Infinite loop */
   for(;;)
   {
@@ -413,25 +418,89 @@ void StartDefaultTask(void const * argument)
 void ReceiveTask_init(void const * argument)
 {
   /* USER CODE BEGIN ReceiveTask_init */
-  	CanFrame frame;
-  	Linklayer linklayer;
-  	Cantp cantp;
-  	TxHeader1.Identifier = 0x11;
-  	TxHeader1.IdType = FDCAN_STANDARD_ID;
-  	TxHeader1.TxFrameType = FDCAN_DATA_FRAME;
-  	TxHeader1.DataLength = FDCAN_DLC_BYTES_8;
-  	TxHeader1.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
-  	TxHeader1.BitRateSwitch = FDCAN_BRS_OFF;
-  	TxHeader1.FDFormat = FDCAN_FD_CAN;
-  	TxHeader1.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
-  	TxHeader1.MessageMarker = 0;
+
+  /*Declare Class Instances */
+	Linklayer linklayer;
+	Cantp cantp;
+ /*Declare Class Instances */
+
+  uint8_t length;
+  uint8_t state = IDLE;
+  uint8_t ErrorState ;
+  CanFrame frame;
 
   /* Infinite loop */
   for(;;)
   {
-    cantp.receiveRequest(frame);
-    osDelay(200);
+      switch(state)
+      {
+         case IDLE:
+        	  if(linklayer.readFrame(&frame) != 0)
+        		  {
+        		  state =IDLE;
+        		  LOG("Waiting for Request : \n");
+        		  break;
+        		  }
+        	  else
+        		  {
+        		  state = ReceiveRequest;
+        		  break;
+        		  }
+          case ReceiveRequest:
+        	  if(cantp.decode(frame, payload) != 0 )
+        	  {
+        		  LOG("Error");
+        		  ErrorState = ErrorDecodingRequest ;
+        		  state = ErrorHandle; /* (EXIT ---> Switch(ExitCode) ---> Handle Error ---> Switch to IDLE */
+        		  break;
+        	  }
+        	  else
+        	  {
+        		  state = ProcessRequest;
+        		  break;
+        	  }
+          case ProcessRequest:
+              /* TODO */
+        	  /* Transfer the reconstituted MSG to UDS LIB */
+        	  /* Retrieve response from UDS LIB */
+        	  /* If any error switch to EXIT State */
+        	  /* IDocanOut() --- > UDS LIB */
+        	  /* UDS --- >   IDocantIn() */
+          case SendResponse:
+        	  if (cantp.encode(response, length) != 0)
+        	  {
+        		  LOG("Error Sending Response \n");
+        		  ErrorState = ErrorEncodingRequest;
+        		  state = ErrorHandle;
+        		  break;
+        	  }
+        	  else
+        	  {
+        		  state = IDLE ;
+        		  break;
+        	  }
+          case ErrorHandle :
+        	  /* TODO */
+        	  switch(ErrorState)
+        	  {
+        	  case ErrorDecodingRequest :
+        		  /* TTODO*/
+        		  /*Hadnle This error */
+        		  state = IDLE;
+        		  break;
+        	  case ErrorEncodingRequest :
+        		  /* TODO*/
+        		  /* Handle This Error */
+        		  /*Return to IDLE */
+        		  state = IDLE;
+        		  break;
+        	  }
+        	  break;
+          default :
+              break;
+      }
   }
+  osDelay(1);
   /* USER CODE END ReceiveTask_init */
 }
 
