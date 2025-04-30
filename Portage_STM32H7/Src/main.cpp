@@ -47,13 +47,15 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define DFRAME_CAN_LEN 10U
+#define RX_DATA_SIZE   8U
 
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 uint8_t payload[MAX_PAYLOAD_SIZE] = {};
 uint8_t response[MAX_PAYLOAD_SIZE] = {};
-uint8_t RxData[8] = {};
+uint8_t RxData[RX_DATA_SIZE ] = {};
 uint8_t TxData1[8] = {};
 FDCAN_TxHeaderTypeDef TxHeader1;
 FDCAN_RxHeaderTypeDef RxHeader;
@@ -69,6 +71,8 @@ void PrintCanMessage(uint8_t *RxData) {
 		RxData[i] = 0;
 	}LOG("\n");
 }
+
+QueueHandle_t xCanFrameQueue ;
 
 /* RxFifo0 Callback ( Interruption )*/
 void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
@@ -89,13 +93,13 @@ void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *hfdcan, uint32_t RxFifo0ITs)
     /* Reception Error */
     Error_Handler();
     }
-    if (HAL_FDCAN_ActivateNotification(hfdcan, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK)
+    else
     {
-      /* Notification Error */
-      Error_Handler();
+    	xQueueSendFromISR(  xCanFrameQueue ,  RxData   , NULL ) ;
     }
+    /**/
+
   }
-  flag = true;
   }
 }
 
@@ -221,12 +225,27 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
-  /* definition and creation of ReceiveTask */
-  osThreadDef(ReceiveTask, ReceiveTask_init, osPriorityHigh, 0, 128);
-  ReceiveTaskHandle = osThreadCreate(osThread(ReceiveTask), NULL);
+  xCanFrameQueue = xQueueCreate( DFRAME_CAN_LEN  , RX_DATA_SIZE  ) ;
+
+  if ( xCanFrameQueue == NULL  )
+  {
+#ifdef DEBUG
+	  while (1);
+
+#else
+	  __NVIC_SystemReset();
+#endif /*DEBUG */
+  }
+  else
+  {
+	  //osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
+	  //defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
+
+	  /* definition and creation of ReceiveTask */
+	  osThreadDef(ReceiveTask, ReceiveTask_init, osPriorityHigh, 0, 128);
+	  ReceiveTaskHandle = osThreadCreate(osThread(ReceiveTask), NULL);
+  }
 
 
   /* USER CODE BEGIN RTOS_THREADS */
@@ -396,18 +415,21 @@ static void MX_GPIO_Init(void)
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument) /*Test Sending a response */
-{
-  /* USER CODE BEGIN 5 */
 
-  /* Infinite loop */
-  for(;;)
-  {
-    osDelay(1);
-  }
-  /* USER CODE END 5 */
-}
-
+//
+//void StartDefaultTask(void const * argument) /*Test Sending a response */
+//{
+//  /* USER CODE BEGIN 5 */
+//
+//  /* Infinite loop */
+//  for(;;)
+//  {
+//    osDelay(1);
+//  }
+//  /* USER CODE END 5 */
+//}
+//
+//
 /* USER CODE BEGIN Header_ReceiveTask_init */
 /**
 * @brief Function implementing the ReceiveTask thread.
@@ -424,7 +446,7 @@ void ReceiveTask_init(void const * argument)
 	Cantp cantp;
  /*Declare Class Instances */
 
-  uint8_t length;
+  uint8_t length =0U;
   uint8_t state = IDLE;
   uint8_t ErrorState ;
   CanFrame frame;
@@ -435,6 +457,8 @@ void ReceiveTask_init(void const * argument)
       switch(state)
       {
          case IDLE:
+
+
         	  if(linklayer.readFrame(&frame) != 0)
         		  {
         		  state =IDLE;
