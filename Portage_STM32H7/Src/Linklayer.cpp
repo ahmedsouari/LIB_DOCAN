@@ -11,9 +11,10 @@
 #include "stm32h7xx_hal_fdcan.h"
 #include "stm32h7xx_hal.h"
 #include <stdio.h>
-
+#include "FreeRTOS.h"
+#include "queue.h"
 extern FDCAN_HandleTypeDef hfdcan1;
-
+extern QueueHandle_t xCanFrameQueue ;
 Linklayer::Linklayer() {
 	// TODO Auto-generated constructor stub
 
@@ -37,31 +38,30 @@ uint8_t Linklayer::sendFrame(CanFrame &frame) {
 	TxHeader.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
 	TxHeader.MessageMarker = 0;
 
-	LOG("send frame from link layer 1\n");
-	/* Send Frame */
-	if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, frame.data)
-			!= HAL_OK) {
+		/* Send Frame */
+	if (HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &TxHeader, frame.data) != HAL_OK)
+	{
+		return 1;
 		Error_Handler();
-	} LOG("send frame from link layer 2\n");
-	HAL_Delay(10);
-	return 0;
+	}
+
+	return 0U;
 }
 uint8_t Linklayer::readFrame(CanFrame* frame) {
 
-    if (flag == true) {
-        //printf("readFrame from link layer\n");
-        for (int i = 0; i < 8; i++) {
-            LOG("0x%02X ", RxData[i]);
-            frame->data[i] = RxData[i];
-            RxData[i] = 0;
-        }
-        LOG("\n ");
-        HAL_Delay(100);
-        return 0;
-    } else {
-    	HAL_Delay(100);
-        return 1;
-    }
+	uint8_t ret =0U ;
+	if (   frame == NULL )
+	{
+		ret = 1U ;
+	}
+	else
+	{
+		if ( pdPASS !=  xQueueReceive(  xCanFrameQueue ,frame->data , 0U )  )
+		{
+			ret = 2U ;
+		}
+	}
+	return ret ;
 }
 
 
